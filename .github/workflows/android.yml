@@ -1,0 +1,37 @@
+name: Criar APK Android
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/android.yml
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Preparar app
+        run: |
+          mkdir -p app/src/main/java/com/danielsouza/ilhadocaos app/src/main/assets
+          cp index.html app/src/main/assets/index.html
+          printf '%s\n' 'pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }' 'dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }' 'rootProject.name = "IlhaDoCaos"' 'include(":app")' > settings.gradle
+          printf '%s\n' "plugins { id 'com.android.application' version '8.7.3' apply false }" > build.gradle
+          printf '%s\n' "plugins { id 'com.android.application' }" "android { namespace 'com.danielsouza.ilhadocaos'; compileSdk 35; defaultConfig { applicationId 'com.danielsouza.ilhadocaos'; minSdk 23; targetSdk 28; versionCode 1; versionName '1.0' } }" > app/build.gradle
+          printf '%s\n' '<manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="Ilha do Caos" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:usesCleartextTraffic="false"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity></application></manifest>' > app/src/main/AndroidManifest.xml
+          printf '%s\n' 'package com.danielsouza.ilhadocaos; import android.app.Activity; import android.os.Bundle; import android.webkit.WebView; public class MainActivity extends Activity { @Override public void onCreate(Bundle b) { super.onCreate(b); WebView w = new WebView(this); w.getSettings().setJavaScriptEnabled(true); w.setBackgroundColor(0xff10152b); setContentView(w); w.loadUrl("file:///android_asset/index.html"); } }' > app/src/main/java/com/danielsouza/ilhadocaos/MainActivity.java
+      - name: Compilar APK
+        run: gradle assembleDebug --no-daemon
+      - name: Publicar APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk Ilha-do-Caos.apk
+          gh release create android-v1 Ilha-do-Caos.apk --title 'Ilha do Caos para Android' --notes 'Versão inicial instalável do jogo.' --target "$GITHUB_SHA"
